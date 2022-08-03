@@ -86,7 +86,12 @@ sub DESTROY {
 		local $Test::Nginx::TODO;
 		my $errors = $self->read_file('error.log');
 		$errors = join "\n", $errors =~ /.+Sanitizer.+/gm;
-		Test::More::is($errors, '', 'no sanitizer errors');
+		my $extra = "";
+		if ($ENV{TEST_NGINX_VALGRIND}) {
+			$extra = "/valgrind";
+			$errors .= $self->read_file('valgrind.log');
+		}
+		Test::More::is($errors, '', "no sanitizer${extra} errors");
 	}
 
 	if ($ENV{TEST_NGINX_CATLOG}) {
@@ -398,7 +403,11 @@ sub run(;$) {
 		my @globals = $self->{_test_globals} ?
 			() : ('-g', "pid $testdir/nginx.pid; "
 			. "error_log $testdir/error.log debug;");
-		exec($NGINX, '-p', "$testdir/", '-c', 'nginx.conf',
+		my @cmd = ($NGINX);
+		if ($ENV{TEST_NGINX_VALGRIND}) {
+			unshift @cmd, 'valgrind', '-q', "--log-file=$testdir/valgrind.log";
+		}
+		exec(@cmd, '-p', "$testdir/", '-c', 'nginx.conf',
 			'-e', 'error.log', @globals)
 			or die "Unable to exec(): $!\n";
 	}
